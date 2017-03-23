@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+
+    <script src="https://aframe.io/releases/0.5.0/aframe.min.js"></script>
+    <script src="https://rawgit.com/jeromeetienne/ar.js/master/aframe/build/aframe-ar.js"></script>
+    <script>THREEx.ArToolkitContext.baseURL = 'https://rawgit.com/jeromeetienne/ar.js/master/three.js/'</script>
+    <script src="https://rawgit.com/mayognaise/aframe-mouse-cursor-component/master/dist/aframe-mouse-cursor-component.min.js"></script>
+    <script src="https://rawgit.com/ngokevin/aframe-look-at-component/master/dist/aframe-look-at-component.min.js"></script>
+</head>
+<body style='margin : 0px; overflow: hidden;'>
+<div id="shotarea" style="position: absolute;left:0;right:0;top:0;bottom:0;width:80px;margin:auto;height:80px;border: 3px dashed black;"></div>
+<a-scene embedded artoolkit='sourceType: webcam;'>
+    <!--<a-box position="-1 0.5 1" rotation="0 45 0" width="1" height="1" depth="1"  scale="0.4 0.4 0.4" color="#4CC3D9"></a-box>-->
+    <a-assets>
+        <img id="my-image" src="b.png">
+        <img id="my-cimage" src="a.png">
+    </a-assets>
+    <a-image src="#my-image" position="0 0 1" look-at="#player" width="1" height="1" depth="1"  scale="0.4 0.4 0.4"></a-image>
+    <a-image src="#my-image" position="0 0 0"  look-at="#player" width="1" height="1" depth="1" scale="0.4 0.4 0.4"></a-image>
+    <a-image src="#my-image" position="2 0.5 1"  look-at="#player" width="1" height="1" depth="1"  scale="0.4 0.4 0.4"></a-image>
+    <a-image src="#my-image" position="3 2 1"  look-at="#player" width="1" height="1" depth="1"  scale="0.4 0.4 0.4"></a-image>
+    <a-image src="#my-image" position="-3 0.5 1"  look-at="#player" width="1" height="1" depth="1"  scale="0.4 0.4 0.4"></a-image>
+    <a-image src="#my-image" position="-2 -2 1"  look-at="#player" width="1" height="1" depth="1"  scale="0.4 0.4 0.4"></a-image>
+    <a-image src="#my-image" position="-1 0.5 1"  look-at="#player" width="1" height="1" depth="1"  scale="0.4 0.4 0.4"></a-image>
+    <a-image src="#my-image" position="0 -4 1"  look-at="#player" width="1" height="1" depth="1"  scale="0.4 0.4 0.4"></a-image>
+    <a-image src="#my-image" position="-10 0 0"  look-at="#player" width="1" height="1" depth="1"  scale="0.4 0.4 0.4"></a-image>
+    <a-image src="#my-image" position="1 2 -1"  look-at="#player" width="1" height="1" depth="1"  scale="0.4 0.4 0.4"></a-image>
+    <a-image src="#my-image" position="2 -2 -3"  look-at="#player" width="1" height="1" depth="1"  scale="0.4 0.4 0.4"></a-image>
+    <a-image src="#my-image" position="-1 1 -2"  look-at="#player" width="1" height="1" depth="1"  scale="0.4 0.4 0.4"></a-image>
+    <a-entity position="0 0 4"  >
+        <a-camera id="player" mouse-cursor></a-camera>
+    </a-entity>
+
+</a-scene>
+
+<script>
+    var cameraEl = document.querySelectorAll('a-image');
+    var shotarea = document.getElementById('shotarea');
+    var shotInch = shotarea.offsetWidth;
+    var shot = false;
+    var change = false;
+
+    function getPosition (e) {
+        if ('ontouchstart' in document) {
+
+                return {
+                    x: e.changedTouches[0].pageX,
+                    y: e.changedTouches[0].pageY
+                }
+
+
+        }
+        else {
+
+                return { x: e.clientX, y: e.clientY }  ;
+
+        }
+    }
+    function isIn(pos) {
+        if (pos.x > shotarea.offsetLeft && pos.x < shotarea.offsetLeft + shotInch
+            && pos.y > shotarea.offsetTop && pos.y < shotarea.offsetTop + shotInch) {
+            return true;
+        }
+        return false;
+    }
+    function addImage () {
+        var img = document.createElement('img');
+        img.src="a.png";
+        img.style="position:absolute;left: -145px;top:-170px;width:450px;height:480px;z-index:100;"
+        shotarea.appendChild(img);
+    }
+    for (var i = 0; i< cameraEl.length; i++) {
+        cameraEl[i].addEventListener('click', function (e) {
+            if (!change) {
+                shot=true;
+
+
+            }
+        });
+    }
+    if ('ontouchstart' in document) {
+        document.body.addEventListener('touchend', function (e) {
+
+            if (change && e instanceof TouchEvent) {
+                setTimeout(function () {change =false}, 1000);
+                shotarea.firstChild && shotarea.removeChild(shotarea.firstChild);
+            }
+            if (shot && e instanceof TouchEvent) {
+                var pos = getPosition(e);
+                if (isIn(pos)) {
+                    change =true;
+                    addImage();
+                }
+                shot = false;
+            }
+        })
+    }
+    else {
+        document.body.addEventListener('click', function (e) {
+
+            if (change && e instanceof MouseEvent) {
+                setTimeout(function () {change =false}, 1000);
+                shotarea.firstChild && shotarea.removeChild(shotarea.firstChild);
+            }
+            if (shot && e instanceof MouseEvent) {
+                var pos = getPosition(e);
+                if (isIn(pos)) {
+                    change =true;
+                    addImage();
+                }
+                shot = false;
+            }
+        })
+    }
+
+
+
+
+</script>
+</body>
+</html>
