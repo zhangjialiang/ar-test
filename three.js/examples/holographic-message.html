@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<!-- three.js library -->
+<script src='vendor/three.js/build/three.js'></script>
+<!-- jsartookit -->
+<script src="../vendor/jsartoolkit5/build/artoolkit.min.js"></script>
+<script src="../vendor/jsartoolkit5/js/artoolkit.api.js"></script>
+<!-- include threex.artoolkit -->
+<script src="../threex-artoolkitsource.js"></script>
+<script src="../threex-artoolkitcontext.js"></script>
+<script src="../threex-armarkercontrols.js"></script>
+<body style='margin : 0px; overflow: hidden; font-family: Monospace;'><div style='position: absolute; top: 10px; width:100%; text-align: center; z-index: 1;'>
+	<a href="https://github.com/jeromeetienne/AR.js/" target="_blank">AR.js</a> - Augmented Reality Business Card for <a href="https://twitter.com/AndraConnect" target="_blank">@AndraConnect</a>
+	<br/>
+	Click to start playing the video.
+</div>
+
+<script id="vertexShader" type="x-shader/x-vertex">
+	varying vec2 vUv;
+	void main() {
+		vUv = uv;
+		gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+	}
+</script>
+<script id="fragmentShader" type="x-shader/x-fragment">
+
+	varying vec2 vUv;
+	uniform sampler2D tDiffuse;
+	uniform float opacity;
+	uniform float time;
+
+	float rand(float n){return fract(sin(n) * 43758.5453123);}
+
+	void main() {
+		
+		// read the texture
+		gl_FragColor = texture2D( tDiffuse, vUv );
+
+		// discard anything too green
+		if( gl_FragColor.r < 0.5 && gl_FragColor.g > 0.2 ){
+		// if( gl_FragColor.r < 0.5 && gl_FragColor.g > 0.2 && gl_FragColor.b < 0.5 ){
+			discard;
+		}
+
+		// compute level of gray
+		float grayLevel = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
+		gl_FragColor.rgb = vec3(grayLevel, grayLevel, grayLevel);
+		
+		// pass grayLevel-ish into cyan-ish
+		gl_FragColor.rgb *= vec3(0.0, 1.0, 1.0);
+
+		// silly glow
+		gl_FragColor.rgb *= 1.3;
+
+		// do a interlace effect
+		float offset = sin(time/3.0);
+		if( mod( (vUv.y+offset) * 96.0, 2.0) < 0.5 ){
+			gl_FragColor.rgb *= 1.1;
+		}else{
+			gl_FragColor.rgb *= (1.0/1.1);	
+		}
+
+		// add a white noise
+		gl_FragColor.rgb *= (1.0 + (rand(time+vUv.x + vUv.y)-0.5)*0.3);			
+
+		// honor opacity
+		gl_FragColor.a = opacity;
+
+		if( gl_FragColor.a == 0.0 ){
+			discard;
+		}
+	}
+</script>
+<script>
+	//////////////////////////////////////////////////////////////////////////////////
+	//		Init
+	//////////////////////////////////////////////////////////////////////////////////
+
+	// init renderer
+	var renderer	= new THREE.WebGLRenderer({
+		antialias	: true,
+		alpha: true
+	});
+	renderer.setClearColor(new THREE.Color('lightgrey'), 0)
+	renderer.setSize( 640, 480 );
+	renderer.domElement.style.position = 'absolute'
+	renderer.domElement.style.top = '0px'
+	renderer.domElement.style.left = '0px'
+	document.body.appendChild( renderer.domElement );
+
+	// array of functions for the rendering loop
+	var onRenderFcts= [];
+
+	// init scene and camera
+	var scene	= new THREE.Scene();
+		
+	//////////////////////////////////////////////////////////////////////////////////
+	//		Initialize a basic camera
+	//////////////////////////////////////////////////////////////////////////////////
+
+	// Create a camera
+	var camera = new THREE.Camera();
+	scene.add(camera);
+
+	////////////////////////////////////////////////////////////////////////////////
+	//          handle arToolkitSource
+	////////////////////////////////////////////////////////////////////////////////
+
+	var arToolkitSource = new THREEx.ArToolkitSource({
+		// to read from the webcam 
+		sourceType : 'webcam',
+		
+		// to read from an image
+		// sourceType : 'image',
+		// sourceUrl : '../../data/images/img.jpg',		
+
+		// to read from a video
+		// sourceType : 'video',
+		// sourceUrl : '../../data/videos/headtracking.mp4',		
+	})
+
+	arToolkitSource.init(function onReady(){
+		// handle resize of renderer
+		arToolkitSource.onResize(renderer.domElement)		
+	})
+	
+	// handle resize
+	window.addEventListener('resize', function(){
+		// handle arToolkitSource resize
+		arToolkitSource.onResize(renderer.domElement)		
+	})	
+	////////////////////////////////////////////////////////////////////////////////
+	//          initialize arToolkitContext
+	////////////////////////////////////////////////////////////////////////////////
+	
+
+	// create atToolkitContext
+	var arToolkitContext = new THREEx.ArToolkitContext({
+		cameraParametersUrl: '../../data/data/camera_para.dat',
+		detectionMode: 'mono',
+		maxDetectionRate: 30,
+		canvasWidth: 80*3,
+		canvasHeight: 60*3,
+	})
+	// initialize it
+	arToolkitContext.init(function onCompleted(){
+		// copy projection matrix to camera
+		camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
+	})
+
+	// update artoolkit on every frame
+	onRenderFcts.push(function(){
+		if( arToolkitSource.ready === false )	return
+
+		arToolkitContext.update( arToolkitSource.domElement )
+		
+		// update scene.visible if the marker is seen
+		scene.visible = camera.visible
+	})
+	
+	
+	////////////////////////////////////////////////////////////////////////////////
+	//          Create a ArMarkerControls
+	////////////////////////////////////////////////////////////////////////////////
+	
+	// init controls for camera
+	var markerControls = new THREEx.ArMarkerControls(arToolkitContext, camera, {
+		type : 'pattern',
+		patternUrl : '../../data/data/patt.hiro',
+		// patternUrl : '../../data/data/patt.kanji',
+		// as we controls the camera, set changeMatrixMode: 'cameraTransformMatrix'
+		changeMatrixMode: 'cameraTransformMatrix'
+	})
+	// as we do changeMatrixMode: 'cameraTransformMatrix', start with invisible scene
+	scene.visible = false
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//		add an object in the scene
+	//////////////////////////////////////////////////////////////////////////////////
+
+	var containerMesh = new THREE.Group
+	scene.add( containerMesh );
+
+	// create videoTexture	
+	var video = document.createElement( 'video' );
+	// video.src = '../../data/videos/headtracking.mp4'
+	// video.src = '../../data/videos/bird_greenscreen.mp4'
+	video.src = '../../data/videos/Star\ wars\ demo\ Alex.mp4'
+	// video.autoplay = true;
+	video.webkitPlaysinline = true;
+	video.controls = false;
+	video.loop = true;
+	// video.muted = true
+	var videoTexture = new THREE.VideoTexture(video)
+	videoTexture.needsUpdate = true		
+	videoTexture.minFilter =  THREE.NearestFilter
+	// trick to trigger the video on android
+	document.body.addEventListener('click', function onClick(){
+		document.body.removeEventListener('click', onClick);
+		video.play()
+	})
+	var geometry = new THREE.PlaneGeometry(1,9/16);
+	var material = new THREE.ShaderMaterial({
+		uniforms: {
+			time: {
+				value: 0.0
+			},
+			opacity: {
+				value: 0.7
+			},
+			tDiffuse: {
+				value: videoTexture
+			},
+		},
+		vertexShader: document.querySelector( '#vertexShader' ).textContent,
+		fragmentShader: document.querySelector( '#fragmentShader' ).textContent,
+		side: THREE.DoubleSide,
+		// TODO try other blending
+	})
+
+	// bill boarding by @blq
+	onRenderFcts.push(function(delta){
+		var x = new THREE.Vector3();
+		var y = new THREE.Vector3();
+		var z = new THREE.Vector3();
+		containerMesh.matrixWorld.extractBasis(x, y, z);
+		videoMesh.up.copy(y);
+		videoMesh.lookAt(camera.position);
+	})
+	onRenderFcts.push(function(delta){
+		videoMesh.material.uniforms.time.value += delta
+	})
+	var videoMesh	= new THREE.Mesh( geometry, material );
+	containerMesh.add(videoMesh)	
+	videoMesh.position.y = 1.0
+	videoMesh.rotation.x = Math.PI/2
+
+	videoMesh.scale.set(1,1,1).multiplyScalar(2.5)
+
+	//////////////////////////////////////////////////////////////////////////////
+	//		Code Separator
+	//////////////////////////////////////////////////////////////////////////////
+
+;(function(){
+	var canvas = document.createElement( 'canvas' );
+	canvas.width = 256;
+	canvas.height = 256;
+
+	var context = canvas.getContext( '2d' );
+	var centerX = canvas.width / 2;
+	var centerY = canvas.height / 2;
+	var radius = canvas.width / 2 * 0.7;
+	context.lineWidth = canvas.width * 0.1;
+	context.strokeStyle = '#ffffff';
+
+	var nChunks = 3
+	var chunkAngle = 2*Math.PI/nChunks
+	var chunkMargin = Math.PI/8
+	
+	context.beginPath();
+	context.arc(centerX, centerY, radius, 0, chunkAngle - chunkMargin, false);
+	context.stroke();
+
+	context.beginPath();
+	context.arc(centerX, centerY, radius, chunkAngle, 2*chunkAngle - chunkMargin, false);
+	context.stroke();
+
+	context.beginPath();
+	context.arc(centerX, centerY, radius, 2*chunkAngle, 3*chunkAngle - chunkMargin, false);
+	context.stroke();
+
+	var texture = new THREE.Texture( canvas );
+	texture.needsUpdate = true
+
+	var geometry	= new THREE.PlaneGeometry(1,1);
+	var material	= new THREE.MeshBasicMaterial({
+		map: texture,
+		transparent : true,
+		opacity: 0.75,
+		color: 'cyan',
+		side: THREE.DoubleSide
+	}); 
+	var ringLowMesh	= new THREE.Mesh( geometry, material );
+	containerMesh.add(ringLowMesh)	
+	ringLowMesh.rotation.x = Math.PI/2
+	ringLowMesh.position.y = +0.05
+	ringLowMesh.scale.set(1,1,1).multiplyScalar(1.2)
+	
+	ringLowMesh.rotation.z = Math.random()*2*Math.PI
+	onRenderFcts.push(function(delta){
+		ringLowMesh.rotation.z += 2*Math.PI*delta / 5
+	})
+	
+	var ringHighMesh	= new THREE.Mesh( geometry, material );
+	ringHighMesh.scale.set(1,1,1).multiplyScalar(1.4)
+	ringHighMesh.rotation.x = Math.PI/2
+	ringHighMesh.position.y = +0.2
+	containerMesh.add(ringHighMesh)	
+	
+	ringHighMesh.rotation.z = Math.random()*2*Math.PI
+	onRenderFcts.push(function(delta){
+		ringHighMesh.rotation.z -= 2*Math.PI*delta / 5
+	})
+})()
+	
+	//////////////////////////////////////////////////////////////////////////////
+	//		opacity animation
+	//////////////////////////////////////////////////////////////////////////////
+	
+	// animation opacity
+	var minScale = 0.001
+	var targetScale = new THREE.Vector3(minScale, minScale, minScale)
+	onRenderFcts.push(function(delta){
+		var ratio = 0.2
+		containerMesh.scale.x = containerMesh.scale.x * (1-ratio) + targetScale.x * ratio
+		containerMesh.scale.y = containerMesh.scale.y * (1-ratio) + targetScale.y * ratio
+		containerMesh.scale.z = containerMesh.scale.z * (1-ratio) + targetScale.z * ratio
+		
+		if( Math.abs(containerMesh.scale.x - minScale) <= 0.001 ){
+			containerMesh.visible = false
+		}else{
+			containerMesh.visible = true			
+		}
+	})
+
+	// toggleCloak on click/keypress
+	function toggleCloak(){
+		if( targetScale.x === 1.0 ){
+			targetScale.set(minScale, minScale, minScale)
+		}else{
+			targetScale.set(1, 1, 1)
+		}
+	}
+	document.body.addEventListener('click', toggleCloak)
+	document.body.addEventListener('keypress', toggleCloak)
+	//////////////////////////////////////////////////////////////////////////////////
+	//		render the whole thing on the page
+	//////////////////////////////////////////////////////////////////////////////////
+
+	// render the scene
+	onRenderFcts.push(function(){
+		renderer.render( scene, camera );
+	})
+
+	// run the rendering loop
+	var lastTimeMsec= null
+	requestAnimationFrame(function animate(nowMsec){
+		// keep looping
+		requestAnimationFrame( animate );
+		// measure time
+		lastTimeMsec	= lastTimeMsec || nowMsec-1000/60
+		var deltaMsec	= Math.min(200, nowMsec - lastTimeMsec)
+		lastTimeMsec	= nowMsec
+		// call each update function
+		onRenderFcts.forEach(function(onRenderFct){
+			onRenderFct(deltaMsec/1000, nowMsec/1000)
+		})
+	})
+</script></body>
